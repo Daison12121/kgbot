@@ -1,0 +1,17 @@
+[Unit]
+Description=Telegram Menu Bot
+After=network.target
+
+[Service]
+Type=simple
+User=YOUR_USERNAME
+WorkingDirectory=/home/YOUR_USERNAME/telegram-bot
+Environment="PATH=/home/YOUR_USERNAME/telegram-bot/venv/bin"
+ExecStart=/home/YOUR_USERNAME/telegram-bot/venv/bin/python bot.py
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
