@@ -31,7 +31,9 @@ class MenuBot:
         
     def is_admin(self, user_id: int) -> bool:
         """Проверка, является ли пользователь администратором"""
-        return user_id in self.storage.get_admins()
+        admins = self.storage.get_admins()
+        logger.info(f"Проверка прав: user_id={user_id}, admins={admins}, is_admin={user_id in admins}")
+        return user_id in admins
     
     async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обработчик команды /start"""
