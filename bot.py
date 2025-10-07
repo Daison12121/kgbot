@@ -2,6 +2,7 @@
 Telegram Bot для управления меню канала и модерации обсуждений
 """
 import logging
+import os
 import re
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import (
@@ -49,6 +50,8 @@ class MenuBot:
                 "ℹ️ /menu_info - Информация о текущем меню\n"
                 "⌨️ /setup_keyboard - Установить inline-кнопку меню в группе\n"
                 "🔘 /enable_menu_button - Включить постоянную кнопку 'Меню на сегодня' внизу чата\n\n"
+                "📞 /set_phone <номер> - Изменить номер телефона для заказов\n"
+                "📱 /show_phone - Показать текущий номер телефона\n\n"
                 "👥 /add_admin <user_id> - Добавить администратора\n"
                 "❌ /remove_admin <user_id> - Удалить администратора\n"
                 "📝 /list_admins - Список администраторов\n"
@@ -605,6 +608,98 @@ class MenuBot:
         admin_list = "\n".join([f"• {admin_id}" for admin_id in admins])
         await update.message.reply_text(f"👥 **Администраторы:**\n\n{admin_list}", parse_mode=ParseMode.MARKDOWN)
     
+    async def set_phone(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Изменить номер телефона для заказов"""
+        user_id = update.effective_user.id
+        
+        if not self.is_admin(user_id):
+            await update.message.reply_text("❌ У вас нет прав для выполнения этой команды.")
+            return
+        
+        if not context.args or len(context.args) != 1:
+            await update.message.reply_text(
+                "❌ Использование: /set_phone <номер>\n\n"
+                "Примеры:\n"
+                "• /set_phone +17736812626\n"
+                "• /set_phone +1 (773) 681-2626\n"
+                "• /set_phone 17736812626"
+            )
+            return
+        
+        new_phone = context.args[0]
+        
+        # Проверяем формат номера (должен содержать цифры)
+        phone_digits = ''.join(filter(str.isdigit, new_phone))
+        if len(phone_digits) < 10:
+            await update.message.reply_text(
+                "❌ Номер телефона слишком короткий.\n"
+                "Минимум 10 цифр."
+            )
+            return
+        
+        # Сохраняем новый номер в .env файл
+        try:
+            env_path = '.env'
+            env_content = []
+            phone_updated = False
+            
+            # Читаем существующий .env файл
+            if os.path.exists(env_path):
+                with open(env_path, 'r', encoding='utf-8') as f:
+                    env_content = f.readlines()
+            
+            # Обновляем или добавляем PHONE_NUMBER
+            new_env_content = []
+            for line in env_content:
+                if line.startswith('PHONE_NUMBER='):
+                    new_env_content.append(f'PHONE_NUMBER={new_phone}\n')
+                    phone_updated = True
+                else:
+                    new_env_content.append(line)
+            
+            # Если PHONE_NUMBER не было в файле, добавляем
+            if not phone_updated:
+                new_env_content.append(f'PHONE_NUMBER={new_phone}\n')
+            
+            # Записываем обновленный .env файл
+            with open(env_path, 'w', encoding='utf-8') as f:
+                f.writelines(new_env_content)
+            
+            # Обновляем в памяти
+            self.config.PHONE_NUMBER = new_phone
+            
+            await update.message.reply_text(
+                f"✅ Номер телефона успешно изменен!\n\n"
+                f"📞 Новый номер: {new_phone}\n\n"
+                f"⚠️ Чтобы изменения вступили в силу в опубликованном меню,\n"
+                f"используйте /publish_menu для обновления меню в канале."
+            )
+            
+            logger.info(f"Номер телефона изменен на {new_phone} пользователем {user_id}")
+            
+        except Exception as e:
+            logger.error(f"Ошибка при изменении номера телефона: {e}")
+            await update.message.reply_text(
+                f"❌ Ошибка при сохранении номера телефона:\n{str(e)}\n\n"
+                f"Попробуйте изменить номер вручную в файле .env на сервере."
+            )
+    
+    async def show_phone(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Показать текущий номер телефона"""
+        user_id = update.effective_user.id
+        
+        if not self.is_admin(user_id):
+            await update.message.reply_text("❌ У вас нет прав для выполнения этой команды.")
+            return
+        
+        current_phone = self.config.PHONE_NUMBER
+        await update.message.reply_text(
+            f"📱 Текущий номер телефона для заказов:\n\n"
+            f"📞 {current_phone}\n\n"
+            f"Для изменения используйте:\n"
+            f"/set_phone <новый_номер>"
+        )
+    
     async def get_chat_info(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Получить информацию о текущем чате (для диагностики)"""
         try:
@@ -956,6 +1051,8 @@ class MenuBot:
         application.add_handler(CommandHandler("add_admin", self.add_admin))
         application.add_handler(CommandHandler("remove_admin", self.remove_admin))
         application.add_handler(CommandHandler("list_admins", self.list_admins))
+        application.add_handler(CommandHandler("set_phone", self.set_phone))
+        application.add_handler(CommandHandler("show_phone", self.show_phone))
         application.add_handler(CommandHandler("chat_info", self.get_chat_info))
         application.add_handler(CommandHandler("setup_keyboard", self.setup_menu_keyboard))
         application.add_handler(CommandHandler("enable_menu_button", self.enable_menu_button))
